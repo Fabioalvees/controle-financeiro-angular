@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DataService } from '../../services/data.service';
@@ -34,7 +34,7 @@ import { colorFor, todayISO } from '../../models';
 
       <div class="card">
         <label class="label">Categoria</label>
-        <div class="chips">
+        <div class="chips" *ngIf="data.categories().length; else noCats">
           <button
             *ngFor="let c of data.categories()"
             class="chip"
@@ -47,11 +47,14 @@ import { colorFor, todayISO } from '../../models';
             {{ c.name }}
           </button>
         </div>
+        <ng-template #noCats>
+          <p class="hint">Você ainda não criou categorias. Vá na aba "Categorias" e crie a primeira.</p>
+        </ng-template>
       </div>
 
       <div class="card">
         <label class="label">Cartão / forma</label>
-        <div class="chips">
+        <div class="chips" *ngIf="data.cards().length; else noCards">
           <button
             *ngFor="let c of data.cards()"
             class="chip"
@@ -64,6 +67,9 @@ import { colorFor, todayISO } from '../../models';
             {{ c.name }}
           </button>
         </div>
+        <ng-template #noCards>
+          <p class="hint">Você ainda não criou cartões. Vá na aba "Categorias" e crie o primeiro.</p>
+        </ng-template>
       </div>
 
       <div class="card two-col">
@@ -98,6 +104,7 @@ import { colorFor, todayISO } from '../../models';
       outline: none; margin-top: 4px; padding-bottom: 4px; font-size: 16px; color: var(--ink);
     }
     .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .hint { font-size: 13px; color: var(--ink-soft); margin-top: 8px; }
     .chip {
       padding: 6px 12px; border-radius: 999px; font-size: 14px; white-space: nowrap;
       border: 1px solid var(--rule); background: transparent; color: var(--ink-soft);
@@ -123,8 +130,14 @@ export class LancarComponent {
   colorFor = colorFor;
 
   constructor(public data: DataService) {
-    this.category = data.categories()[0]?.name ?? '';
-    this.card = data.cards()[0]?.name ?? '';
+    effect(() => {
+      const cats = data.categories();
+      if (!this.category && cats.length) this.category = cats[0].name;
+    });
+    effect(() => {
+      const cards = data.cards();
+      if (!this.card && cards.length) this.card = cards[0].name;
+    });
   }
 
   isValid(): boolean {

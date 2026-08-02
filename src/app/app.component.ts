@@ -39,6 +39,10 @@ import { TabId } from './models';
               </div>
               <button class="logout" (click)="supabase.signOut()">Sair</button>
             </div>
+            <div class="account" *ngIf="supabase.user() as u">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="var(--ink-soft)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <span>{{ u.email }}</span>
+            </div>
             <h1 class="month">{{ monthLabel }}</h1>
           </header>
 
@@ -67,7 +71,14 @@ import { TabId } from './models';
       display: flex; align-items: center; gap: 8px; color: var(--stamp);
       font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .14em;
     }
-    .logout { font-size: 12px; color: var(--ink-soft); text-decoration: underline; }
+    .logout {
+      font-size: 12px; color: var(--stamp); font-weight: 600; text-decoration: underline;
+      padding: 4px 8px;
+    }
+    .account {
+      display: flex; align-items: center; gap: 6px; margin-top: 6px;
+      font-size: 12px; color: var(--ink-soft);
+    }
     .month {
       font-family: var(--serif); font-size: 26px; font-weight: 700; color: var(--ink);
       margin: 4px 0 0; text-transform: capitalize;

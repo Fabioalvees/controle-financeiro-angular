@@ -2,22 +2,6 @@ import { Injectable, computed, effect, signal } from '@angular/core';
 import { SupabaseService } from './supabase.service';
 import { Cartao, Categoria, Meta, Transacao } from '../models';
 
-const DEFAULT_CATEGORIES = [
-  { name: 'Mercado', budget: 900 },
-  { name: 'Diversão', budget: 400 },
-  { name: 'Padaria', budget: 0 },
-  { name: 'Pix', budget: 0 },
-  { name: 'Roupas/Brinquedos', budget: 0 },
-  { name: 'Contas Fixas', budget: 0 },
-  { name: 'Outros', budget: 0 },
-];
-
-const DEFAULT_CARDS = [
-  { name: 'Cartão Fabio', limit: 2600 },
-  { name: 'Cartão Extra', limit: 0 },
-  { name: 'Pix', limit: 0 },
-];
-
 function mapTx(row: any): Transacao {
   return {
     id: row.id,
@@ -103,24 +87,10 @@ export class DataService {
 
     this.transactions.set((txRes.data ?? []).map(mapTx) as any);
 
-    let categories = (catRes.data ?? []).map((r: any) => ({ ...mapCategory(r), id: r.id }));
-    if (categories.length === 0) {
-      const seeded = await this.db
-        .from('categories')
-        .insert(DEFAULT_CATEGORIES.map((c) => ({ ...c, user_id: this.uid })))
-        .select();
-      categories = (seeded.data ?? []).map((r: any) => ({ ...mapCategory(r), id: r.id }));
-    }
+    const categories = (catRes.data ?? []).map((r: any) => ({ ...mapCategory(r), id: r.id }));
     this.categories.set(categories as any);
 
-    let cards = (cardRes.data ?? []).map((r: any) => ({ ...mapCard(r), id: r.id }));
-    if (cards.length === 0) {
-      const seeded = await this.db
-        .from('cards')
-        .insert(DEFAULT_CARDS.map((c) => ({ name: c.name, card_limit: c.limit, user_id: this.uid })))
-        .select();
-      cards = (seeded.data ?? []).map((r: any) => ({ ...mapCard(r), id: r.id }));
-    }
+    const cards = (cardRes.data ?? []).map((r: any) => ({ ...mapCard(r), id: r.id }));
     this.cards.set(cards as any);
 
     if (metaRes.data) {
