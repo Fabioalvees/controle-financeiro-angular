@@ -76,17 +76,20 @@ export class DataService {
   }
 
   constructor(private supabase: SupabaseService) {
-    effect(() => {
-      const user = this.supabase.user();
-      if (user) {
-        this.loadAll();
-      } else {
-        this.transactions.set([]);
-        this.categories.set([]);
-        this.cards.set([]);
-        this.meta.set({ salario: 0 });
-      }
-    });
+    effect(
+      () => {
+        const user = this.supabase.user();
+        if (user) {
+          this.loadAll();
+        } else {
+          this.transactions.set([]);
+          this.categories.set([]);
+          this.cards.set([]);
+          this.meta.set({ salario: 0 });
+        }
+      },
+      { allowSignalWrites: true }
+    );
   }
 
   private async loadAll(): Promise<void> {
