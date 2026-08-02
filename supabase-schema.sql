@@ -51,19 +51,3 @@ create policy "transactions: owner only" on transactions
 
 create policy "meta: owner only" on meta
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-
--- ==========================================================
--- MIGRAÇÃO: carteira (saldo real) separada do limite de cartão
--- Cole isso no SQL Editor do Supabase e clique em "Run".
--- Seguro rodar mesmo que já tenha dados: usa "if not exists".
--- ==========================================================
-
--- saldo real em dinheiro/conta, editável e independente do cartão
-alter table meta add column if not exists carteira numeric not null default 0;
-
--- marca se o "cartão" é crédito (não sai da carteira na hora)
--- ou débito/pix (sai da carteira na hora)
-alter table cards add column if not exists is_credit boolean not null default true;
-
--- ajusta o Pix (se já existir) para não ser tratado como crédito
-update cards set is_credit = false where lower(name) = 'pix';

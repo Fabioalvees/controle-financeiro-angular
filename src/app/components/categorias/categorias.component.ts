@@ -38,14 +38,9 @@ import { colorFor } from '../../models';
 
       <div class="card">
         <div class="label">Cartões e limites</div>
-        <p class="hint">Marque "crédito" para cartões cuja fatura vence depois. Deixe desmarcado para débito/Pix/dinheiro, que já sai da carteira na hora.</p>
         <div class="row" *ngFor="let c of data.cards()">
           <svg class="card-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="var(--ink-soft)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg>
           <span class="name">{{ c.name }}</span>
-          <label class="credit-toggle">
-            <input type="checkbox" [checked]="c.isCredit !== false" (change)="toggleCredit(c.name, $event)" />
-            <span>crédito</span>
-          </label>
           <span class="prefix">R$</span>
           <input
             class="num-input"
@@ -60,10 +55,6 @@ import { colorFor } from '../../models';
         </div>
         <div class="new-row">
           <input class="line-input" [(ngModel)]="newCard" placeholder="novo cartão" />
-          <label class="credit-toggle">
-            <input type="checkbox" [(ngModel)]="newCardIsCredit" />
-            <span>crédito</span>
-          </label>
           <input class="line-input small" inputmode="decimal" [(ngModel)]="newCardLimit" placeholder="limite" />
           <button class="add-btn" (click)="addCard()">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -86,12 +77,6 @@ import { colorFor } from '../../models';
       outline: none; text-align: right; font-size: 14px; color: var(--ink); font-family: var(--mono);
     }
     .trash { color: var(--ink-soft); flex-shrink: 0; }
-    .hint { font-size: 11px; color: var(--ink-soft); margin: -6px 0 10px; line-height: 1.4; }
-    .credit-toggle {
-      display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--ink-soft);
-      flex-shrink: 0; white-space: nowrap;
-    }
-    .credit-toggle input { accent-color: var(--stamp); }
     .new-row { display: flex; align-items: center; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--rule); }
     .line-input {
       flex: 1; background: transparent; border: none; border-bottom: 1px solid var(--rule);
@@ -110,7 +95,6 @@ export class CategoriasComponent {
   newCatBudget = '';
   newCard = '';
   newCardLimit = '';
-  newCardIsCredit = true;
 
   constructor(public data: DataService) {}
 
@@ -132,15 +116,9 @@ export class CategoriasComponent {
 
   addCard(): void {
     if (!this.newCard.trim()) return;
-    this.data.addCard(this.newCard, this.toNum(this.newCardLimit), this.newCardIsCredit);
+    this.data.addCard(this.newCard, this.toNum(this.newCardLimit));
     this.newCard = '';
     this.newCardLimit = '';
-    this.newCardIsCredit = true;
-  }
-
-  toggleCredit(name: string, ev: Event): void {
-    const checked = (ev.target as HTMLInputElement).checked;
-    this.data.updateCardIsCredit(name, checked);
   }
 
   removeCard(name: string): void {
