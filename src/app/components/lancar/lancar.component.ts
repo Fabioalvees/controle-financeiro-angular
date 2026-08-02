@@ -54,7 +54,17 @@ import { colorFor, todayISO } from '../../models';
 
       <div class="card">
         <label class="label">Cartão / forma</label>
-        <div class="chips" *ngIf="data.cards().length; else noCards">
+        <div class="chips">
+          <button
+            class="chip"
+            [class.active]="card === 'Pix'"
+            [style.background]="card === 'Pix' ? 'var(--good)' : 'transparent'"
+            [style.borderColor]="card === 'Pix' ? 'var(--good)' : 'var(--rule)'"
+            [style.color]="card === 'Pix' ? 'var(--paper-raised)' : 'var(--ink-soft)'"
+            (click)="card = 'Pix'"
+          >
+            Pix
+          </button>
           <button
             *ngFor="let c of data.cards()"
             class="chip"
@@ -67,9 +77,6 @@ import { colorFor, todayISO } from '../../models';
             {{ c.name }}
           </button>
         </div>
-        <ng-template #noCards>
-          <p class="hint">Você ainda não criou cartões. Vá na aba "Categorias" e crie o primeiro.</p>
-        </ng-template>
       </div>
 
       <div class="card two-col">
@@ -123,7 +130,7 @@ export class LancarComponent {
   amountStr = '';
   desc = '';
   category = '';
-  card = '';
+  card = 'Pix';
   installments = 1;
   date = todayISO();
 
@@ -133,10 +140,6 @@ export class LancarComponent {
     effect(() => {
       const cats = data.categories();
       if (!this.category && cats.length) this.category = cats[0].name;
-    });
-    effect(() => {
-      const cards = data.cards();
-      if (!this.card && cards.length) this.card = cards[0].name;
     });
   }
 

@@ -1,6 +1,6 @@
 import { Injectable, computed, effect, signal } from '@angular/core';
 import { SupabaseService } from './supabase.service';
-import { Cartao, Categoria, Meta, Transacao } from '../models';
+import { Cartao, Categoria, Renda, Transacao, PIX } from '../models';
 
 function mapTx(row: any): Transacao {
   return {
@@ -14,11 +14,25 @@ function mapTx(row: any): Transacao {
     createdAt: Date.parse(row.created_at),
   };
 }
-function mapCategory(row: any): Categoria {
-  return { name: row.name, budget: Number(row.budget) } as any;
+function mapCategory(row: any): Categoria & { id: string } {
+  return { id: row.id, name: row.name, budget: Number(row.budget) };
 }
-function mapCard(row: any): Cartao {
-  return { name: row.name, limit: Number(row.card_limit) } as any;
+function mapCard(row: any): Cartao & { id: string } {
+  return {
+    id: row.id,
+    name: row.name,
+    limit: Number(row.card_limit),
+    dueDay: row.due_day ?? null,
+  };
+}
+function mapIncome(row: any): Renda {
+  return {
+    id: row.id,
+    desc: row.description,
+    amount: Number(row.amount),
+    date: row.income_date,
+    createdAt: Date.parse(row.created_at),
+  };
 }
 
 @Injectable({ providedIn: 'root' })
@@ -26,13 +40,25 @@ export class DataService {
   readonly transactions = signal<(Transacao & { id: string })[]>([]);
   readonly categories = signal<(Categoria & { id: string })[]>([]);
   readonly cards = signal<(Cartao & { id: string })[]>([]);
-  readonly meta = signal<Meta>({ salario: 0 });
+  readonly incomes = signal<Renda[]>([]);
   readonly loading = signal(true);
+
+  readonly totalReceita = computed(() =>
+    this.incomes().reduce((s, r) => s + Number(r.amount || 0), 0)
+  );
 
   readonly totalGasto = computed(() =>
     this.transactions().reduce((s, t) => s + Number(t.amount || 0), 0)
   );
-  readonly saldo = computed(() => Number(this.meta().salario || 0) - this.totalGasto());
+
+  // Pix desconta o saldo na hora. Cartão de crédito não — mexe só no limite do cartão.
+  readonly gastoImediato = computed(() =>
+    this.transactions()
+      .filter((t) => t.card === PIX)
+      .reduce((s, t) => s + Number(t.amount || 0), 0)
+  );
+
+  readonly saldo = computed(() => this.totalReceita() - this.gastoImediato());
 
   readonly byCategory = computed(() =>
     this.categories().map((c) => ({
@@ -69,7 +95,7 @@ export class DataService {
           this.transactions.set([]);
           this.categories.set([]);
           this.cards.set([]);
-          this.meta.set({ salario: 0 });
+          this.incomes.set([]);
         }
       },
       { allowSignalWrites: true }
@@ -78,27 +104,17 @@ export class DataService {
 
   private async loadAll(): Promise<void> {
     this.loading.set(true);
-    const [txRes, catRes, cardRes, metaRes] = await Promise.all([
+    const [txRes, catRes, cardRes, incomeRes] = await Promise.all([
       this.db.from('transactions').select('*').order('created_at', { ascending: false }),
       this.db.from('categories').select('*').order('created_at', { ascending: true }),
       this.db.from('cards').select('*').order('created_at', { ascending: true }),
-      this.db.from('meta').select('*').eq('user_id', this.uid).maybeSingle(),
+      this.db.from('incomes').select('*').order('created_at', { ascending: false }),
     ]);
 
     this.transactions.set((txRes.data ?? []).map(mapTx) as any);
-
-    const categories = (catRes.data ?? []).map((r: any) => ({ ...mapCategory(r), id: r.id }));
-    this.categories.set(categories as any);
-
-    const cards = (cardRes.data ?? []).map((r: any) => ({ ...mapCard(r), id: r.id }));
-    this.cards.set(cards as any);
-
-    if (metaRes.data) {
-      this.meta.set({ salario: Number(metaRes.data.salario) });
-    } else {
-      await this.db.from('meta').insert({ user_id: this.uid, salario: 2250 });
-      this.meta.set({ salario: 2250 });
-    }
+    this.categories.set((catRes.data ?? []).map(mapCategory) as any);
+    this.cards.set((cardRes.data ?? []).map(mapCard) as any);
+    this.incomes.set((incomeRes.data ?? []).map(mapIncome));
 
     this.loading.set(false);
   }
@@ -144,6 +160,24 @@ export class DataService {
     this.transactions.update((prev) => prev.filter((t) => t.id !== id));
   }
 
+  // ---- incomes ----
+  async addIncome(desc: string, amount: number, date: string): Promise<void> {
+    if (!desc.trim() || !(amount > 0)) return;
+    const { data, error } = await this.db
+      .from('incomes')
+      .insert({ user_id: this.uid, description: desc.trim(), amount, income_date: date })
+      .select()
+      .single();
+    if (error || !data) return console.error(error);
+    this.incomes.update((prev) => [mapIncome(data), ...prev]);
+  }
+
+  async deleteIncome(id: string): Promise<void> {
+    const { error } = await this.db.from('incomes').delete().eq('id', id);
+    if (error) return console.error(error);
+    this.incomes.update((prev) => prev.filter((r) => r.id !== id));
+  }
+
   // ---- categories ----
   async addCategory(name: string, budget: number): Promise<void> {
     if (!name.trim()) return;
@@ -154,7 +188,7 @@ export class DataService {
       .select()
       .single();
     if (error || !data) return console.error(error);
-    this.categories.update((prev) => [...prev, { ...mapCategory(data), id: data.id } as any]);
+    this.categories.update((prev) => [...prev, mapCategory(data) as any]);
   }
 
   async removeCategory(name: string): Promise<void> {
@@ -179,16 +213,21 @@ export class DataService {
   }
 
   // ---- cards ----
-  async addCard(name: string, limit: number): Promise<void> {
+  async addCard(name: string, limit: number, dueDay: number | null): Promise<void> {
     if (!name.trim()) return;
     if (this.cards().some((c) => c.name.toLowerCase() === name.trim().toLowerCase())) return;
     const { data, error } = await this.db
       .from('cards')
-      .insert({ user_id: this.uid, name: name.trim(), card_limit: limit || 0 })
+      .insert({
+        user_id: this.uid,
+        name: name.trim(),
+        card_limit: limit || 0,
+        due_day: dueDay,
+      })
       .select()
       .single();
     if (error || !data) return console.error(error);
-    this.cards.update((prev) => [...prev, { ...mapCard(data), id: data.id } as any]);
+    this.cards.update((prev) => [...prev, mapCard(data) as any]);
   }
 
   async removeCard(name: string): Promise<void> {
@@ -200,23 +239,19 @@ export class DataService {
   }
 
   async updateCardLimit(name: string, limit: number): Promise<void> {
-    const card = this.cards().find((c) => c.name === name);
-    if (!card) return;
-    const { error } = await this.db
-      .from('cards')
-      .update({ card_limit: limit || 0 })
-      .eq('id', (card as any).id);
-    if (error) return console.error(error);
-    this.cards.update((prev) =>
-      prev.map((c) => (c.name === name ? { ...c, limit: limit || 0 } : c))
-    );
+    await this.patchCard(name, { card_limit: limit || 0 }, { limit: limit || 0 });
   }
 
-  // ---- meta ----
-  async setSalario(v: number): Promise<void> {
-    this.meta.update((m) => ({ ...m, salario: v || 0 }));
-    const { error } = await this.db.from('meta').upsert({ user_id: this.uid, salario: v || 0 });
-    if (error) console.error(error);
+  async updateCardDueDay(name: string, dueDay: number | null): Promise<void> {
+    await this.patchCard(name, { due_day: dueDay }, { dueDay });
+  }
+
+  private async patchCard(name: string, dbPatch: any, localPatch: Partial<Cartao>): Promise<void> {
+    const card = this.cards().find((c) => c.name === name);
+    if (!card) return;
+    const { error } = await this.db.from('cards').update(dbPatch).eq('id', (card as any).id);
+    if (error) return console.error(error);
+    this.cards.update((prev) => prev.map((c) => (c.name === name ? { ...c, ...localPatch } : c)));
   }
 
   isCategoryInUse(name: string): boolean {

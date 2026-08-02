@@ -1,8 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DataService } from '../../services/data.service';
-import { colorFor, fmtBRL } from '../../models';
+import { colorFor, fmtBRL, todayISO } from '../../models';
 
 @Component({
   selector: 'app-resumo',
@@ -10,10 +10,11 @@ import { colorFor, fmtBRL } from '../../models';
   imports: [CommonModule, FormsModule],
   template: `
     <div class="stack">
+      <!-- SALDO -->
       <div class="card balance-card">
         <div class="balance-top">
           <div>
-            <div class="label light">Saldo do mês</div>
+            <div class="label light">Saldo disponível</div>
             <div class="balance" [style.color]="data.saldo() >= 0 ? '#8FD1B5' : '#E39C93'">
               {{ fmtBRL(data.saldo()) }}
             </div>
@@ -24,20 +25,69 @@ import { colorFor, fmtBRL } from '../../models';
           </svg>
         </div>
         <div class="balance-row">
-          <span class="light">Receita</span>
-          <input
-            class="salario-input"
-            inputmode="decimal"
-            [ngModel]="data.meta().salario"
-            (ngModelChange)="data.setSalario($event)"
-          />
+          <span class="light">Receita total</span>
+          <span class="mono strong-light">{{ fmtBRL(data.totalReceita()) }}</span>
         </div>
         <div class="balance-row">
-          <span class="light">Total gasto</span>
-          <span class="mono strong-light">{{ fmtBRL(data.totalGasto()) }}</span>
+          <span class="light">Gasto à vista/pix</span>
+          <span class="mono strong-light">{{ fmtBRL(data.gastoImediato()) }}</span>
+        </div>
+        <p class="note">Compras no cartão de crédito não descontam o saldo aqui — elas contam pro limite do cartão, abaixo.</p>
+
+        <div class="income-list" *ngIf="data.incomes().length">
+          <div class="income-row" *ngFor="let r of data.incomes()">
+            <span class="income-desc">{{ r.desc }}</span>
+            <span class="mono income-amount">+ {{ fmtBRL(r.amount) }}</span>
+            <button class="icon-btn-light" (click)="data.deleteIncome(r.id)">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="add-income" *ngIf="!addingIncome(); else incomeForm">
+          <button class="add-income-btn" (click)="addingIncome.set(true)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            Registrar receita (salário, pix recebido…)
+          </button>
+        </div>
+        <ng-template #incomeForm>
+          <div class="income-form">
+            <input class="line-input-dark" placeholder="descrição" [(ngModel)]="incomeDesc" />
+            <input class="line-input-dark small" inputmode="decimal" placeholder="valor" [(ngModel)]="incomeAmount" />
+            <button class="add-income-confirm" (click)="submitIncome()">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg>
+            </button>
+          </div>
+        </ng-template>
+      </div>
+
+      <!-- GASTO POR CARTAO -->
+      <div class="card">
+        <div class="label">Gasto por cartão</div>
+        <div class="detail-list">
+          <div *ngFor="let c of data.byCard()">
+            <div class="dotted">
+              <span class="mono">
+                {{ c.name }}
+                <span class="due" *ngIf="c.dueDay">· vence dia {{ c.dueDay }}</span>
+              </span>
+              <span class="dots"></span>
+              <span class="mono">{{ fmtBRL(c.total) }}</span>
+            </div>
+            <ng-container *ngIf="c.limit > 0">
+              <div class="progress">
+                <div class="progress-fill" [style.width.%]="pct(c.total, c.limit)" [style.background]="'var(--good)'"></div>
+              </div>
+              <div class="progress-note" [style.color]="c.total > c.limit ? 'var(--stamp)' : 'var(--ink-soft)'">
+                disponível: {{ fmtBRL(availLimit(c.total, c.limit)) }}
+              </div>
+            </ng-container>
+          </div>
+          <p class="empty" *ngIf="!data.byCard().length">Nenhum cartão cadastrado ainda.</p>
         </div>
       </div>
 
+      <!-- GASTO POR CATEGORIA (grafico) -->
       <div class="card">
         <div class="label">Gasto por categoria</div>
         <ng-container *ngIf="chartData().length; else emptyChart">
@@ -56,6 +106,7 @@ import { colorFor, fmtBRL } from '../../models';
         </ng-template>
       </div>
 
+      <!-- DETALHE POR CATEGORIA -->
       <div class="card">
         <div class="label">Detalhe por categoria</div>
         <div class="detail-list">
@@ -74,33 +125,13 @@ import { colorFor, fmtBRL } from '../../models';
               </div>
             </ng-container>
           </div>
+          <p class="empty" *ngIf="!data.byCategory().length">Nenhuma categoria cadastrada ainda.</p>
         </div>
         <div class="perforation"></div>
         <div class="dotted total">
-          <span class="mono strong">TOTAL</span>
+          <span class="mono strong">TOTAL GASTO</span>
           <span class="dots"></span>
           <span class="mono strong">{{ fmtBRL(data.totalGasto()) }}</span>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="label">Gasto por cartão</div>
-        <div class="detail-list">
-          <div *ngFor="let c of data.byCard()">
-            <div class="dotted">
-              <span class="mono">{{ c.name }}</span>
-              <span class="dots"></span>
-              <span class="mono">{{ fmtBRL(c.total) }}</span>
-            </div>
-            <ng-container *ngIf="c.limit > 0">
-              <div class="progress">
-                <div class="progress-fill" [style.width.%]="pct(c.total, c.limit)" [style.background]="'var(--good)'"></div>
-              </div>
-              <div class="progress-note" [style.color]="c.total > c.limit ? 'var(--stamp)' : 'var(--ink-soft)'">
-                disponível: {{ fmtBRL(availLimit(c.total, c.limit)) }}
-              </div>
-            </ng-container>
-          </div>
         </div>
       </div>
     </div>
@@ -114,16 +145,35 @@ import { colorFor, fmtBRL } from '../../models';
     .light { color: #C9C4B8; }
     .balance { font-size: 30px; font-weight: 700; font-family: var(--mono); margin-top: 4px; }
     .balance-row {
-      display: flex; align-items: center; justify-content: space-between; margin-top: 12px;
+      display: flex; align-items: center; justify-content: space-between; margin-top: 10px;
       padding-top: 10px; border-top: 1px solid #4A453D; font-size: 14px;
     }
-    .salario-input {
-      background: transparent; border: none; outline: none; text-align: right; font-weight: 600;
-      color: #F6F4EE; font-family: var(--mono); width: 110px;
-    }
     .strong-light { color: #F6F4EE; font-weight: 600; }
+    .note { font-size: 11px; color: #9B958A; margin: 10px 0 0; line-height: 1.4; }
     .mono { font-family: var(--mono); }
     .strong { font-weight: 700; }
+
+    .income-list { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+    .income-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .income-desc { flex: 1; color: #E4E1D8; }
+    .income-amount { color: #8FD1B5; }
+    .icon-btn-light { color: #9B958A; flex-shrink: 0; }
+
+    .add-income { margin-top: 14px; }
+    .add-income-btn {
+      width: 100%; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 600;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      background: #3A362F; color: #E4E1D8;
+    }
+    .income-form { margin-top: 14px; display: flex; gap: 8px; align-items: center; }
+    .line-input-dark {
+      background: transparent; border: none; border-bottom: 1px solid #4A453D; outline: none;
+      color: #F6F4EE; font-size: 13px; padding-bottom: 4px; flex: 1;
+    }
+    .line-input-dark.small { flex: 0 0 80px; text-align: right; }
+    .add-income-confirm { background: var(--good); color: var(--paper-raised); border-radius: 999px; padding: 6px; flex-shrink: 0; }
+
+    .due { color: var(--ink-soft); font-weight: 400; font-size: 11px; }
 
     .bars { display: flex; align-items: flex-end; gap: 10px; height: 160px; overflow-x: auto; padding-top: 8px; }
     .bar-col { display: flex; flex-direction: column; align-items: center; min-width: 52px; height: 100%; justify-content: flex-end; }
@@ -152,6 +202,10 @@ export class ResumoComponent {
   fmtBRL = fmtBRL;
   colorFor = colorFor;
 
+  addingIncome = signal(false);
+  incomeDesc = '';
+  incomeAmount = '';
+
   constructor(public data: DataService) {}
 
   chartData() {
@@ -169,5 +223,14 @@ export class ResumoComponent {
 
   availLimit(total: number, limit: number): number {
     return Math.max(0, limit - total);
+  }
+
+  submitIncome(): void {
+    const amount = Number(this.incomeAmount.replace(',', '.'));
+    if (!this.incomeDesc.trim() || !(amount > 0)) return;
+    this.data.addIncome(this.incomeDesc, amount, todayISO());
+    this.incomeDesc = '';
+    this.incomeAmount = '';
+    this.addingIncome.set(false);
   }
 }

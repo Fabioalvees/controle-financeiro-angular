@@ -32,6 +32,13 @@ import { Categoria, Cartao } from '../../models';
           </div>
           <div class="chips">
             <button
+              class="chip"
+              [style.background]="form.card === 'Pix' ? 'var(--good)' : 'transparent'"
+              [style.borderColor]="form.card === 'Pix' ? 'var(--good)' : 'var(--rule)'"
+              [style.color]="form.card === 'Pix' ? 'var(--paper-raised)' : 'var(--ink-soft)'"
+              (click)="form.card = 'Pix'"
+            >Pix</button>
+            <button
               *ngFor="let c of cards"
               class="chip"
               [style.background]="form.card === c.name ? 'var(--ink)' : 'transparent'"

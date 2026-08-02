@@ -6,6 +6,7 @@ export interface Categoria {
 export interface Cartao {
   name: string;
   limit: number;
+  dueDay: number | null; // dia de vencimento da fatura
 }
 
 export interface Transacao {
@@ -19,11 +20,17 @@ export interface Transacao {
   createdAt: number;
 }
 
-export interface Meta {
-  salario: number;
+export interface Renda {
+  id: string;
+  desc: string;
+  amount: number;
+  date: string;
+  createdAt: number;
 }
 
 export type TabId = 'lancar' | 'resumo' | 'categorias' | 'lancamentos';
+
+export const PIX = 'Pix';
 
 export const CAT_COLORS = [
   '#A5332A', '#3B6B57', '#B4791E', '#3D5A80',
