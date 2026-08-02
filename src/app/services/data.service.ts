@@ -13,9 +13,9 @@ const DEFAULT_CATEGORIES = [
 ];
 
 const DEFAULT_CARDS = [
-  { name: 'Cartão Fabio', limit: 2600 },
-  { name: 'Cartão Extra', limit: 0 },
-  { name: 'Pix', limit: 0 },
+  { name: 'Cartão Fabio', limit: 2600, isCredit: true },
+  { name: 'Cartão Extra', limit: 0, isCredit: true },
+  { name: 'Pix', limit: 0, isCredit: false },
 ];
 
 function mapTx(row: any): Transacao {
@@ -34,7 +34,7 @@ function mapCategory(row: any): Categoria {
   return { name: row.name, budget: Number(row.budget) } as any;
 }
 function mapCard(row: any): Cartao {
-  return { name: row.name, limit: Number(row.card_limit) } as any;
+  return { name: row.name, limit: Number(row.card_limit), isCredit: row.is_credit !== false } as any;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -42,13 +42,39 @@ export class DataService {
   readonly transactions = signal<(Transacao & { id: string })[]>([]);
   readonly categories = signal<(Categoria & { id: string })[]>([]);
   readonly cards = signal<(Cartao & { id: string })[]>([]);
-  readonly meta = signal<Meta>({ salario: 0 });
+  readonly meta = signal<Meta>({ salario: 0, carteira: 0 });
   readonly loading = signal(true);
 
   readonly totalGasto = computed(() =>
     this.transactions().reduce((s, t) => s + Number(t.amount || 0), 0)
   );
-  readonly saldo = computed(() => Number(this.meta().salario || 0) - this.totalGasto());
+
+  // gasto pago com cartão de crédito (não sai da carteira agora, vira fatura futura)
+  readonly totalGastoCredito = computed(() => {
+    const creditNames = new Set(this.cards().filter((c) => c.isCredit).map((c) => c.name));
+    return this.transactions()
+      .filter((t) => creditNames.has(t.card))
+      .reduce((s, t) => s + Number(t.amount || 0), 0);
+  });
+
+  // gasto pago direto (débito, pix, dinheiro) — esse sim sai da carteira na hora
+  readonly totalGastoDireto = computed(() => this.totalGasto() - this.totalGastoCredito());
+
+  // soma dos limites de todos os cartões de crédito
+  readonly limiteTotal = computed(() =>
+    this.cards()
+      .filter((c) => c.isCredit)
+      .reduce((s, c) => s + Number(c.limit || 0), 0)
+  );
+
+  // quanto ainda dá pra gastar no cartão de crédito
+  readonly limiteDisponivel = computed(() => this.limiteTotal() - this.totalGastoCredito());
+
+  // Carteira: dinheiro real. Só é afetada por depósitos manuais, salário
+  // e gastos diretos (débito/pix) — NUNCA pelo limite do cartão de crédito.
+  readonly saldo = computed(
+    () => Number(this.meta().carteira || 0) + Number(this.meta().salario || 0) - this.totalGastoDireto()
+  );
 
   readonly byCategory = computed(() =>
     this.categories().map((c) => ({
@@ -84,7 +110,7 @@ export class DataService {
         this.transactions.set([]);
         this.categories.set([]);
         this.cards.set([]);
-        this.meta.set({ salario: 0 });
+        this.meta.set({ salario: 0, carteira: 0 });
       }
     });
   }
@@ -114,17 +140,27 @@ export class DataService {
     if (cards.length === 0) {
       const seeded = await this.db
         .from('cards')
-        .insert(DEFAULT_CARDS.map((c) => ({ name: c.name, card_limit: c.limit, user_id: this.uid })))
+        .insert(
+          DEFAULT_CARDS.map((c) => ({
+            name: c.name,
+            card_limit: c.limit,
+            is_credit: c.isCredit,
+            user_id: this.uid,
+          }))
+        )
         .select();
       cards = (seeded.data ?? []).map((r: any) => ({ ...mapCard(r), id: r.id }));
     }
     this.cards.set(cards as any);
 
     if (metaRes.data) {
-      this.meta.set({ salario: Number(metaRes.data.salario) });
+      this.meta.set({
+        salario: Number(metaRes.data.salario),
+        carteira: Number(metaRes.data.carteira || 0),
+      });
     } else {
-      await this.db.from('meta').insert({ user_id: this.uid, salario: 2250 });
-      this.meta.set({ salario: 2250 });
+      await this.db.from('meta').insert({ user_id: this.uid, salario: 2250, carteira: 0 });
+      this.meta.set({ salario: 2250, carteira: 0 });
     }
 
     this.loading.set(false);
@@ -206,16 +242,27 @@ export class DataService {
   }
 
   // ---- cards ----
-  async addCard(name: string, limit: number): Promise<void> {
+  async addCard(name: string, limit: number, isCredit: boolean = true): Promise<void> {
     if (!name.trim()) return;
     if (this.cards().some((c) => c.name.toLowerCase() === name.trim().toLowerCase())) return;
     const { data, error } = await this.db
       .from('cards')
-      .insert({ user_id: this.uid, name: name.trim(), card_limit: limit || 0 })
+      .insert({ user_id: this.uid, name: name.trim(), card_limit: limit || 0, is_credit: isCredit })
       .select()
       .single();
     if (error || !data) return console.error(error);
     this.cards.update((prev) => [...prev, { ...mapCard(data), id: data.id } as any]);
+  }
+
+  async updateCardIsCredit(name: string, isCredit: boolean): Promise<void> {
+    const card = this.cards().find((c) => c.name === name);
+    if (!card) return;
+    const { error } = await this.db
+      .from('cards')
+      .update({ is_credit: isCredit })
+      .eq('id', (card as any).id);
+    if (error) return console.error(error);
+    this.cards.update((prev) => prev.map((c) => (c.name === name ? { ...c, isCredit } : c)));
   }
 
   async removeCard(name: string): Promise<void> {
@@ -244,6 +291,17 @@ export class DataService {
     this.meta.update((m) => ({ ...m, salario: v || 0 }));
     const { error } = await this.db.from('meta').upsert({ user_id: this.uid, salario: v || 0 });
     if (error) console.error(error);
+  }
+
+  async setCarteira(v: number): Promise<void> {
+    this.meta.update((m) => ({ ...m, carteira: v || 0 }));
+    const { error } = await this.db.from('meta').upsert({ user_id: this.uid, carteira: v || 0 });
+    if (error) console.error(error);
+  }
+
+  async addToCarteira(delta: number): Promise<void> {
+    const novo = Number(this.meta().carteira || 0) + Number(delta || 0);
+    await this.setCarteira(novo);
   }
 
   isCategoryInUse(name: string): boolean {

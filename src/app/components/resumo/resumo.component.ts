@@ -13,7 +13,7 @@ import { colorFor, fmtBRL } from '../../models';
       <div class="card balance-card">
         <div class="balance-top">
           <div>
-            <div class="label light">Saldo do mês</div>
+            <div class="label light">Carteira</div>
             <div class="balance" [style.color]="data.saldo() >= 0 ? '#8FD1B5' : '#E39C93'">
               {{ fmtBRL(data.saldo()) }}
             </div>
@@ -24,7 +24,7 @@ import { colorFor, fmtBRL } from '../../models';
           </svg>
         </div>
         <div class="balance-row">
-          <span class="light">Receita</span>
+          <span class="light">Salário</span>
           <input
             class="salario-input"
             inputmode="decimal"
@@ -32,9 +32,35 @@ import { colorFor, fmtBRL } from '../../models';
             (ngModelChange)="data.setSalario($event)"
           />
         </div>
+        <div class="balance-row add-row">
+          <span class="light">Adicionar à carteira</span>
+          <div class="add-inline">
+            <input class="salario-input" inputmode="decimal" [(ngModel)]="addAmount" placeholder="0" />
+            <button class="add-btn-sm" (click)="addToCarteira()">+</button>
+          </div>
+        </div>
         <div class="balance-row">
-          <span class="light">Total gasto</span>
-          <span class="mono strong-light">{{ fmtBRL(data.totalGasto()) }}</span>
+          <span class="light">Gasto direto (débito/pix)</span>
+          <span class="mono strong-light">{{ fmtBRL(data.totalGastoDireto()) }}</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="label">Cartão de crédito</div>
+        <div class="dotted">
+          <span class="mono">Usado no mês</span>
+          <span class="dots"></span>
+          <span class="mono">{{ fmtBRL(data.totalGastoCredito()) }}</span>
+        </div>
+        <div class="progress">
+          <div
+            class="progress-fill"
+            [style.width.%]="pct(data.totalGastoCredito(), data.limiteTotal())"
+            style="background: var(--good)"
+          ></div>
+        </div>
+        <div class="progress-note">
+          disponível: {{ fmtBRL(data.limiteDisponivel()) }} de {{ fmtBRL(data.limiteTotal()) }}
         </div>
       </div>
 
@@ -122,6 +148,12 @@ import { colorFor, fmtBRL } from '../../models';
       color: #F6F4EE; font-family: var(--mono); width: 110px;
     }
     .strong-light { color: #F6F4EE; font-weight: 600; }
+    .add-row .add-inline { display: flex; align-items: center; gap: 6px; }
+    .add-btn-sm {
+      background: var(--stamp); color: var(--paper-raised); border-radius: 999px;
+      width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; font-size: 15px; line-height: 1;
+    }
     .mono { font-family: var(--mono); }
     .strong { font-weight: 700; }
 
@@ -151,8 +183,16 @@ import { colorFor, fmtBRL } from '../../models';
 export class ResumoComponent {
   fmtBRL = fmtBRL;
   colorFor = colorFor;
+  addAmount = '';
 
   constructor(public data: DataService) {}
+
+  addToCarteira(): void {
+    const v = Number(String(this.addAmount).replace(',', '.')) || 0;
+    if (!v) return;
+    this.data.addToCarteira(v);
+    this.addAmount = '';
+  }
 
   chartData() {
     return this.data.byCategory().filter((c) => c.total > 0);

@@ -6,6 +6,7 @@ export interface Categoria {
 export interface Cartao {
   name: string;
   limit: number;
+  isCredit: boolean; // true = cartão de crédito (não sai da carteira na hora); false = débito/pix (sai da carteira na hora)
 }
 
 export interface Transacao {
@@ -21,6 +22,7 @@ export interface Transacao {
 
 export interface Meta {
   salario: number;
+  carteira: number; // saldo real em dinheiro/conta, independente do limite de cartão
 }
 
 export type TabId = 'lancar' | 'resumo' | 'categorias' | 'lancamentos';
