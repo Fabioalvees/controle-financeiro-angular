@@ -1,20 +1,20 @@
-import { Component, signal } from '@angular/core';
+import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { DataService } from '../../services/data.service';
-import { colorFor, fmtBRL, todayISO } from '../../models';
+import { colorFor, fmtBRL } from '../../models';
 
 @Component({
   selector: 'app-resumo',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule],
   template: `
     <div class="stack">
-      <!-- SALDO -->
+      <!-- CARTEIRA -->
       <div class="card balance-card">
+        <!-- Saldo da carteira -->
         <div class="balance-top">
           <div>
-            <div class="label light">Saldo disponível</div>
+            <div class="label light">Saldo da carteira</div>
             <div class="balance" [style.color]="data.saldo() >= 0 ? '#8FD1B5' : '#E39C93'">
               {{ fmtBRL(data.saldo()) }}
             </div>
@@ -34,31 +34,28 @@ import { colorFor, fmtBRL, todayISO } from '../../models';
         </div>
         <p class="note">Compras no cartão de crédito não descontam o saldo aqui — elas contam pro limite do cartão, abaixo.</p>
 
-        <div class="income-list" *ngIf="data.incomes().length">
-          <div class="income-row" *ngFor="let r of data.incomes()">
-            <span class="income-desc">{{ r.desc }}</span>
-            <span class="mono income-amount">+ {{ fmtBRL(r.amount) }}</span>
-            <button class="icon-btn-light" (click)="data.deleteIncome(r.id)">
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>
-            </button>
-          </div>
-        </div>
+        <div class="balance-divider"></div>
 
-        <div class="add-income" *ngIf="!addingIncome(); else incomeForm">
-          <button class="add-income-btn" (click)="addingIncome.set(true)">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-            Registrar receita (salário, pix recebido…)
-          </button>
-        </div>
-        <ng-template #incomeForm>
-          <div class="income-form">
-            <input class="line-input-dark" placeholder="descrição" [(ngModel)]="incomeDesc" />
-            <input class="line-input-dark small" inputmode="decimal" placeholder="valor" [(ngModel)]="incomeAmount" />
-            <button class="add-income-confirm" (click)="submitIncome()">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg>
-            </button>
+        <!-- Crédito disponível -->
+        <div class="balance-top">
+          <div>
+            <div class="label light">Crédito disponível</div>
+            <div class="balance" style="color:#8FD1B5">
+              {{ fmtBRL(data.creditoDisponivel()) }}
+            </div>
           </div>
-        </ng-template>
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#C9C4B8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/>
+          </svg>
+        </div>
+        <div class="balance-row">
+          <span class="light">Limite total</span>
+          <span class="mono strong-light">{{ fmtBRL(data.totalLimiteCredito()) }}</span>
+        </div>
+        <div class="balance-row">
+          <span class="light">Usado no cartão</span>
+          <span class="mono strong-light">{{ fmtBRL(data.totalUsadoCredito()) }}</span>
+        </div>
       </div>
 
       <!-- GASTO POR CARTAO -->
@@ -153,25 +150,7 @@ import { colorFor, fmtBRL, todayISO } from '../../models';
     .mono { font-family: var(--mono); }
     .strong { font-weight: 700; }
 
-    .income-list { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
-    .income-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-    .income-desc { flex: 1; color: #E4E1D8; }
-    .income-amount { color: #8FD1B5; }
-    .icon-btn-light { color: #9B958A; flex-shrink: 0; }
-
-    .add-income { margin-top: 14px; }
-    .add-income-btn {
-      width: 100%; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 600;
-      display: flex; align-items: center; justify-content: center; gap: 6px;
-      background: #3A362F; color: #E4E1D8;
-    }
-    .income-form { margin-top: 14px; display: flex; gap: 8px; align-items: center; }
-    .line-input-dark {
-      background: transparent; border: none; border-bottom: 1px solid #4A453D; outline: none;
-      color: #F6F4EE; font-size: 13px; padding-bottom: 4px; flex: 1;
-    }
-    .line-input-dark.small { flex: 0 0 80px; text-align: right; }
-    .add-income-confirm { background: var(--good); color: var(--paper-raised); border-radius: 999px; padding: 6px; flex-shrink: 0; }
+    .balance-divider { height: 1px; background: #4A453D; margin: 16px 0 4px; }
 
     .due { color: var(--ink-soft); font-weight: 400; font-size: 11px; }
 
@@ -202,10 +181,6 @@ export class ResumoComponent {
   fmtBRL = fmtBRL;
   colorFor = colorFor;
 
-  addingIncome = signal(false);
-  incomeDesc = '';
-  incomeAmount = '';
-
   constructor(public data: DataService) {}
 
   chartData() {
@@ -223,14 +198,5 @@ export class ResumoComponent {
 
   availLimit(total: number, limit: number): number {
     return Math.max(0, limit - total);
-  }
-
-  submitIncome(): void {
-    const amount = Number(this.incomeAmount.replace(',', '.'));
-    if (!this.incomeDesc.trim() || !(amount > 0)) return;
-    this.data.addIncome(this.incomeDesc, amount, todayISO());
-    this.incomeDesc = '';
-    this.incomeAmount = '';
-    this.addingIncome.set(false);
   }
 }

@@ -78,6 +78,19 @@ export class DataService {
     }))
   );
 
+  // Soma apenas cartões com limite definido (limite > 0).
+  readonly totalLimiteCredito = computed(() =>
+    this.byCard().reduce((s, c) => s + (c.limit > 0 ? c.limit : 0), 0)
+  );
+
+  readonly totalUsadoCredito = computed(() =>
+    this.byCard().reduce((s, c) => s + (c.limit > 0 ? c.total : 0), 0)
+  );
+
+  readonly creditoDisponivel = computed(() =>
+    Math.max(0, this.totalLimiteCredito() - this.totalUsadoCredito())
+  );
+
   private get uid(): string {
     return this.supabase.user()!.id;
   }

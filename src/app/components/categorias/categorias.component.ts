@@ -1,8 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DataService } from '../../services/data.service';
-import { colorFor } from '../../models';
+import { colorFor, fmtBRL, todayISO } from '../../models';
 
 @Component({
   selector: 'app-categorias',
@@ -10,6 +10,36 @@ import { colorFor } from '../../models';
   imports: [CommonModule, FormsModule],
   template: `
     <div class="stack">
+      <div class="card">
+        <div class="label">Receitas</div>
+        <div class="income-list" *ngIf="data.incomes().length">
+          <div class="income-row" *ngFor="let r of data.incomes()">
+            <span class="name">{{ r.desc }}</span>
+            <span class="mono income-amount">+ {{ fmtBRL(r.amount) }}</span>
+            <button class="trash" (click)="data.deleteIncome(r.id)">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>
+            </button>
+          </div>
+        </div>
+        <p class="empty" *ngIf="!data.incomes().length">Nenhuma receita registrada ainda.</p>
+
+        <div class="add-income" *ngIf="!addingIncome(); else incomeForm">
+          <button class="add-income-btn" (click)="addingIncome.set(true)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            Registrar receita (salário, pix recebido…)
+          </button>
+        </div>
+        <ng-template #incomeForm>
+          <div class="new-row income-form">
+            <input class="line-input" placeholder="descrição" [(ngModel)]="incomeDesc" />
+            <input class="line-input small" inputmode="decimal" placeholder="valor" [(ngModel)]="incomeAmount" />
+            <button class="add-btn" (click)="submitIncome()">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg>
+            </button>
+          </div>
+        </ng-template>
+      </div>
+
       <div class="card">
         <div class="label">Categorias e limites</div>
         <div class="row" *ngFor="let c of data.categories()">
@@ -107,17 +137,45 @@ import { colorFor } from '../../models';
       background: var(--stamp); color: var(--paper-raised); border-radius: 999px;
       padding: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     }
+
+    .income-list { display: flex; flex-direction: column; }
+    .income-row {
+      display: flex; align-items: center; gap: 6px; padding: 6px 0;
+      border-top: 1px solid var(--rule);
+    }
+    .income-amount { color: var(--good); font-size: 13px; flex-shrink: 0; }
+    .add-income { margin-top: 4px; }
+    .add-income-btn {
+      width: 100%; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 600;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      background: var(--paper); color: var(--ink); border: 1px solid var(--rule);
+    }
+    .income-form { padding-bottom: 4px; margin-bottom: 0; }
   `],
 })
 export class CategoriasComponent {
   colorFor = colorFor;
+  fmtBRL = fmtBRL;
   newCat = '';
   newCatBudget = '';
   newCard = '';
   newCardLimit = '';
   newCardDueDay = '';
 
+  addingIncome = signal(false);
+  incomeDesc = '';
+  incomeAmount = '';
+
   constructor(public data: DataService) {}
+
+  submitIncome(): void {
+    const amount = Number(this.incomeAmount.replace(',', '.'));
+    if (!this.incomeDesc.trim() || !(amount > 0)) return;
+    this.data.addIncome(this.incomeDesc, amount, todayISO());
+    this.incomeDesc = '';
+    this.incomeAmount = '';
+    this.addingIncome.set(false);
+  }
 
   toNum(v: string): number {
     return Number(String(v).replace(',', '.')) || 0;
