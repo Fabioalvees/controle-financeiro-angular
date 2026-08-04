@@ -60,6 +60,18 @@ export class DataService {
 
   readonly saldo = computed(() => this.totalReceita() - this.gastoImediato());
 
+  readonly limiteTotalCartoes = computed(() =>
+    this.cards().reduce((s, c) => s + Number(c.limit || 0), 0)
+  );
+
+  readonly gastoTotalCartoes = computed(() =>
+    this.byCard().reduce((s, c) => s + c.total, 0)
+  );
+
+  readonly creditoDisponivel = computed(() =>
+    Math.max(0, this.limiteTotalCartoes() - this.gastoTotalCartoes())
+  );
+
   readonly byCategory = computed(() =>
     this.categories().map((c) => ({
       ...c,
@@ -76,19 +88,6 @@ export class DataService {
         .filter((t) => t.card === c.name)
         .reduce((s, t) => s + Number(t.amount || 0), 0),
     }))
-  );
-
-  // Soma apenas cartões com limite definido (limite > 0).
-  readonly totalLimiteCredito = computed(() =>
-    this.byCard().reduce((s, c) => s + (c.limit > 0 ? c.limit : 0), 0)
-  );
-
-  readonly totalUsadoCredito = computed(() =>
-    this.byCard().reduce((s, c) => s + (c.limit > 0 ? c.total : 0), 0)
-  );
-
-  readonly creditoDisponivel = computed(() =>
-    Math.max(0, this.totalLimiteCredito() - this.totalUsadoCredito())
   );
 
   private get uid(): string {

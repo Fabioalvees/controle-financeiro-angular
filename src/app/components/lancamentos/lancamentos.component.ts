@@ -1,5 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { DataService } from '../../services/data.service';
 import { Transacao, colorFor, fmtBRL } from '../../models';
 import { EditModalComponent } from '../edit-modal/edit-modal.component';
@@ -7,28 +8,29 @@ import { EditModalComponent } from '../edit-modal/edit-modal.component';
 @Component({
   selector: 'app-lancamentos',
   standalone: true,
-  imports: [CommonModule, EditModalComponent],
+  imports: [CommonModule, FormsModule, EditModalComponent],
   template: `
     <div class="stack">
       <div class="filters">
-        <button
-          class="chip"
-          [style.background]="filter() === 'Todas' ? 'var(--ink)' : 'transparent'"
-          [style.color]="filter() === 'Todas' ? 'var(--paper-raised)' : 'var(--ink-soft)'"
-          (click)="filter.set('Todas')"
-        >Todas</button>
-        <button
-          *ngFor="let c of data.categories()"
-          class="chip"
-          [style.background]="filter() === c.name ? colorFor(c.name, data.categories()) : 'transparent'"
-          [style.borderColor]="filter() === c.name ? colorFor(c.name, data.categories()) : 'var(--rule)'"
-          [style.color]="filter() === c.name ? 'var(--paper-raised)' : 'var(--ink-soft)'"
-          (click)="filter.set(c.name)"
-        >{{ c.name }}</button>
+        <div class="filter-field">
+          <label class="filter-label">Categoria</label>
+          <select class="filter-select" [(ngModel)]="categoryFilter">
+            <option value="Todas">Todas</option>
+            <option *ngFor="let c of data.categories()" [value]="c.name">{{ c.name }}</option>
+          </select>
+        </div>
+        <div class="filter-field">
+          <label class="filter-label">Cartão</label>
+          <select class="filter-select" [(ngModel)]="cardFilter">
+            <option value="Todos">Todos</option>
+            <option value="Pix">Pix</option>
+            <option *ngFor="let c of data.cards()" [value]="c.name">{{ c.name }}</option>
+          </select>
+        </div>
       </div>
 
       <div class="card" *ngIf="filtered().length === 0">
-        <p class="empty">Nada por aqui ainda. Lance seu primeiro gasto na aba "Lançar".</p>
+        <p class="empty">Nada por aqui com esse filtro.</p>
       </div>
 
       <div class="card" *ngIf="filtered().length > 0">
@@ -62,8 +64,13 @@ import { EditModalComponent } from '../edit-modal/edit-modal.component';
   `,
   styles: [`
     .stack { display: flex; flex-direction: column; gap: 16px; }
-    .filters { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
-    .chip { padding: 6px 12px; border-radius: 999px; font-size: 14px; white-space: nowrap; border: 1px solid var(--rule); background: transparent; color: var(--ink-soft); flex-shrink: 0; }
+    .filters { display: flex; gap: 10px; }
+    .filter-field { flex: 1; min-width: 0; }
+    .filter-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); display: block; margin-bottom: 3px; }
+    .filter-select {
+      width: 100%; background: var(--paper-raised); border: 1px solid var(--rule); border-radius: 8px;
+      padding: 8px 10px; font-size: 13px; color: var(--ink); outline: none;
+    }
     .card { background: var(--paper-raised); border: 1px solid var(--rule); border-radius: 10px; padding: 16px; }
     .empty { font-size: 14px; text-align: center; color: var(--ink-soft); padding: 32px 0; }
     .tx-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--rule); }
@@ -78,7 +85,8 @@ import { EditModalComponent } from '../edit-modal/edit-modal.component';
   `],
 })
 export class LancamentosComponent {
-  filter = signal('Todas');
+  categoryFilter = 'Todas';
+  cardFilter = 'Todos';
   editing = signal<Transacao | null>(null);
   colorFor = colorFor;
   fmtBRL = fmtBRL;
@@ -88,7 +96,8 @@ export class LancamentosComponent {
   filtered(): Transacao[] {
     return this.data
       .transactions()
-      .filter((t) => this.filter() === 'Todas' || t.category === this.filter())
+      .filter((t) => this.categoryFilter === 'Todas' || t.category === this.categoryFilter)
+      .filter((t) => this.cardFilter === 'Todos' || t.card === this.cardFilter)
       .sort((a, b) => b.createdAt - a.createdAt);
   }
 
